@@ -1,0 +1,128 @@
+================================================================================
+  IBC WASTEWATER TREATMENT SYSTEM - QUICK START GUIDE
+  Hochschule Koblenz - Praxisphase Project
+================================================================================
+
+FIRST TIME SETUP:
+-----------------
+
+1. Install Prerequisites:
+   - Python 3.8+ (https://www.python.org/downloads/)
+   - Node.js 16+ (https://nodejs.org/)
+
+2. Setup Backend:
+   cd backend
+   python -m venv venv
+   venv\Scripts\activate
+   pip install -r requirements.txt
+
+3. Setup Frontend:
+   cd frontend
+   npm install
+
+EVERY TIME YOU START:
+--------------------
+
+Option A - Use Quick Start Script (Easiest):
+   Double-click: START_WINDOWS.bat
+
+Option B - Manual Start:
+
+   Terminal 1 (Backend):
+   cd backend
+   venv\Scripts\activate
+   python app.py
+
+   Terminal 2 (Frontend):
+   cd frontend
+   npm run dev
+
+   Browser:
+   Open http://localhost:3000
+
+USING THE SYSTEM:
+----------------
+
+1. Start Treatment Cycle:
+   - Click "Start Cycle" button
+   - Watch phase change to FILLING
+   - Water level chart updates in real-time
+
+2. Monitor Progress:
+   - Phase Timeline shows current stage
+   - Component Status shows active pumps/blower
+   - Event Log records all actions
+
+3. Manual Control (when cycle not running):
+   - Turn individual components ON/OFF
+   - Test each pump and blower independently
+
+4. Emergency Stop:
+   - Red button stops everything immediately
+   - Click "Reset Emergency Stop" to resume
+
+TREATMENT PHASES:
+----------------
+
+1. FILLING    → Fill tank (inlet pump runs)
+2. AERATION   → Treat wastewater (blower + recirculation)
+3. SETTLING   → Let solids settle (all off)
+4. DRAINING   → Discharge water (outlet pump runs)
+
+Then cycle completes and returns to IDLE.
+
+IMPORTANT NOTES:
+---------------
+
+- This is MOCK MODE on Windows (simulated hardware)
+- Perfect for testing before Raspberry Pi deployment
+- All data is logged to SQLite database
+- Configuration in: backend/config/treatment_config.yaml
+
+TROUBLESHOOTING:
+---------------
+
+Frontend shows "Disconnected":
+  → Make sure backend started first
+  → Check backend terminal for errors
+
+"Port already in use":
+  → Close other programs using ports 5000 or 3000
+  → Or change ports in configuration
+
+Python/npm not found:
+  → Restart terminal after installing
+  → Check system PATH includes Python and Node.js
+
+NEXT STEPS:
+----------
+
+1. Try starting a complete treatment cycle
+2. Test manual control of components
+3. Modify treatment_config.yaml to change timings
+4. Check the full README.md for detailed documentation
+5. Review INSTALL.md for troubleshooting
+
+FILES YOU CAN MODIFY:
+--------------------
+
+Backend Configuration:
+  backend/.env                           (Environment settings)
+  backend/config/treatment_config.yaml   (Treatment process)
+
+Frontend:
+  frontend/src/App.jsx                   (Main application)
+  frontend/src/components/               (UI components)
+  frontend/src/App.css                   (Styling)
+
+CONTACTS:
+--------
+
+For questions about this project, contact your supervisor at
+Hochschule Koblenz.
+
+Project: Kooperationsprojekt Elektrotechnik und Siedlungswasserwirtschaft
+
+================================================================================
+  Good luck with your Praxisphase! 🚀
+================================================================================
