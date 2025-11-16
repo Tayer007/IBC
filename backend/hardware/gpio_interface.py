@@ -192,6 +192,22 @@ class RaspberryPiGPIO(GPIOInterface):
 
         return distance
 
+    def read_input(self, pin: int) -> bool:
+        """Read Raspberry Pi GPIO input"""
+        if not self.available:
+            raise RuntimeError("RPi.GPIO not available")
+
+        return self.GPIO.input(pin) == self.GPIO.HIGH
+
+    def setup_input(self, pin: int, pull_down: bool = True):
+        """Setup Raspberry Pi GPIO input pin"""
+        if not self.available:
+            raise RuntimeError("RPi.GPIO not available")
+
+        pull_mode = self.GPIO.PUD_DOWN if pull_down else self.GPIO.PUD_UP
+        self.GPIO.setup(pin, self.GPIO.IN, pull_up_down=pull_mode)
+        print(f"[RPi GPIO] Pin {pin} configured as input with pull_{'down' if pull_down else 'up'}")
+
 
 def get_gpio_interface(mode: str = "mock") -> GPIOInterface:
     """

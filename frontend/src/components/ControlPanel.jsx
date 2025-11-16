@@ -10,7 +10,8 @@ function ControlPanel({
   onPause,
   onResume,
   onEmergencyStop,
-  onResetEmergency
+  onResetEmergency,
+  onResetSimulation
 }) {
   return (
     <div className="control-panel card">
@@ -74,6 +75,22 @@ function ControlPanel({
               </button>
             )}
           </div>
+        </div>
+
+        <div className="control-group">
+          <h3>Simulation</h3>
+          <div className="button-group">
+            <button
+              className="btn btn-info"
+              onClick={onResetSimulation}
+              disabled={isRunning}
+            >
+              🔄 Simulation Zurücksetzen
+            </button>
+          </div>
+          <p style={{ fontSize: '0.875rem', color: '#94a3b8', marginTop: '0.5rem' }}>
+            Setzt Wasserstand auf leer (100cm) zurück
+          </p>
         </div>
 
         {emergencyStopped && (

@@ -64,6 +64,9 @@ class TreatmentController:
             config_path: Path to YAML configuration file
             hardware_mode: 'mock' for development, 'gpio' for Raspberry Pi
         """
+        # Store config path for saving later
+        self.config_path = config_path
+
         # Load configuration
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
@@ -71,6 +74,12 @@ class TreatmentController:
         # Initialize GPIO interface
         self.gpio = get_gpio_interface(hardware_mode)
         self.gpio.setup()
+
+        # Setup water level sensor buttons as inputs
+        # NOTE: Physical wiring is swapped - GPIO 23 = EMPTY, GPIO 24 = FULL
+        self.gpio.setup_input(23, pull_down=True)  # Empty button - GPIO 23 (physically wired to empty sensor)
+        self.gpio.setup_input(24, pull_down=True)  # Full button - GPIO 24 (physically wired to full sensor)
+        print("[CONTROLLER] Water level sensor buttons configured on GPIO 23 (EMPTY) and GPIO 24 (FULL)")
 
         # State variables
         self.current_phase = TreatmentPhase.IDLE
@@ -94,8 +103,12 @@ class TreatmentController:
         self.aeration_phase_start: Optional[float] = None
 
         # Sensor data
-        self.current_level = 0.0
+        self.current_level = 50.0  # Start with safe middle value (sensor will update this)
         self.last_level_read = 0.0
+
+        # Water level button states (swapped due to physical wiring)
+        self.water_full_button_pressed = False  # GPIO 24 - Tank FULL, stop inlet
+        self.water_empty_button_pressed = False  # GPIO 23 - Tank EMPTY, stop drain
 
         # Threading
         self.control_thread: Optional[threading.Thread] = None
@@ -248,6 +261,20 @@ class TreatmentController:
 
             if component not in self.component_states:
                 return False
+
+            # Safety check: Read button states before allowing manual control
+            if state == True:  # Only check when trying to turn ON
+                # NOTE: Wiring is swapped - GPIO 24 = FULL, GPIO 23 = EMPTY
+                water_full = self.gpio.read_input(24)   # GPIO 24 connected to FULL sensor
+                water_empty = self.gpio.read_input(23)  # GPIO 23 connected to EMPTY sensor
+
+                if component == 'inlet_pump' and water_full:
+                    print("[WATER LEVEL] Cannot turn on inlet pump - Tank is FULL")
+                    return False
+
+                if component == 'drain_valve' and water_empty:
+                    print("[WATER LEVEL] Cannot turn on drain valve - Tank is EMPTY")
+                    return False
 
             # Get pin number from config
             pin = self._get_component_pin(component)
@@ -516,11 +543,51 @@ class TreatmentController:
         if current_time - self.last_level_read >= read_interval:
             trigger = self.config['hardware']['sensors']['level']['trigger_pin']
             echo = self.config['hardware']['sensors']['level']['echo_pin']
-            self.current_level = self.gpio.read_distance(trigger, echo)
+            level_reading = self.gpio.read_distance(trigger, echo)
+
+            # Ignore invalid readings (sensor errors return -1.0)
+            # Keep previous valid reading if sensor fails
+            if level_reading > 0:
+                self.current_level = level_reading
+            else:
+                # Use a safe default value if we've never gotten a valid reading
+                if self.current_level <= 0:
+                    self.current_level = 50.0  # Middle range, safe value
+
             self.last_level_read = current_time
+
+            # Read water level sensor buttons (swapped due to physical wiring)
+            self.water_full_button_pressed = self.gpio.read_input(24)  # Full sensor - GPIO 24
+            self.water_empty_button_pressed = self.gpio.read_input(23)  # Empty sensor - GPIO 23
+
+            # Debug logging - print button states
+            print(f"[WATER LEVEL DEBUG] GPIO 24 (FULL): {self.water_full_button_pressed}, GPIO 23 (EMPTY): {self.water_empty_button_pressed}")
+
+            # Check and stop components based on button states
+            if self.water_full_button_pressed:
+                if self.component_states.get('inlet_pump', False):
+                    print("[WATER LEVEL] FULL sensor triggered - Stopping inlet pump")
+                    self._set_component_state('inlet_pump', False)
+                    self._emit_event('water_level_alarm', {
+                        'type': 'full',
+                        'message': 'Tank FULL - inlet pump stopped',
+                        'timestamp': datetime.now().isoformat()
+                    })
+
+            if self.water_empty_button_pressed:
+                if self.component_states.get('drain_valve', False):
+                    print("[WATER LEVEL] EMPTY sensor triggered - Stopping drain valve")
+                    self._set_component_state('drain_valve', False)
+                    self._emit_event('water_level_alarm', {
+                        'type': 'empty',
+                        'message': 'Tank EMPTY - drain valve stopped',
+                        'timestamp': datetime.now().isoformat()
+                    })
 
             self._emit_event('sensor_update', {
                 'level': self.current_level,
+                'water_full': self.water_full_button_pressed,
+                'water_empty': self.water_empty_button_pressed,
                 'timestamp': datetime.now().isoformat()
             })
 
@@ -671,6 +738,10 @@ class TreatmentController:
                 self.config['phase_durations'][key] = float(value)
 
             print(f"[CONTROLLER] Updated phase durations: {durations}")
+
+            # Save to YAML file
+            self._save_config_to_file()
+
             return True
 
     def update_aeration_settings(self, settings: Dict[str, float]) -> bool:
@@ -703,7 +774,20 @@ class TreatmentController:
                 self.config['aeration']['pulse']['t_stosspause'] = float(settings['t_stosspause'])
 
             print(f"[CONTROLLER] Updated aeration settings: {settings}")
+
+            # Save to YAML file
+            self._save_config_to_file()
+
             return True
+
+    def _save_config_to_file(self):
+        """Save current configuration to YAML file"""
+        try:
+            with open(self.config_path, 'w') as f:
+                yaml.dump(self.config, f, default_flow_style=False, sort_keys=False)
+            print(f"[CONTROLLER] Configuration saved to {self.config_path}")
+        except Exception as e:
+            print(f"[CONTROLLER] Error saving configuration: {e}")
 
     def cleanup(self):
         """Cleanup resources"""

@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
 import './ConfigPanel.css'
 
+// Backend API URL configuration
+const API_BASE_URL = window.location.hostname === 'localhost'
+  ? 'http://localhost:5000'
+  : window.location.origin
+
 function ConfigPanel({ config, isRunning, onConfigUpdate }) {
   const [phaseDurations, setPhaseDurations] = useState({
     t_z1: 0,
@@ -82,7 +87,7 @@ function ConfigPanel({ config, isRunning, onConfigUpdate }) {
 
   const handleSavePhases = async () => {
     try {
-      const response = await fetch('/api/config/phase-durations', {
+      const response = await fetch(`${API_BASE_URL}/api/config/phase-durations`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(phaseDurations)
@@ -103,7 +108,7 @@ function ConfigPanel({ config, isRunning, onConfigUpdate }) {
 
   const handleSaveAeration = async () => {
     try {
-      const response = await fetch('/api/config/aeration', {
+      const response = await fetch(`${API_BASE_URL}/api/config/aeration`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(aerationSettings)
@@ -339,6 +344,12 @@ function ConfigInput({ label, value, onChange, disabled, error }) {
     setInputValue(e.target.value)
   }
 
+  const handleSliderChange = (e) => {
+    const newValue = e.target.value
+    setInputValue(newValue)
+    onChange(newValue)  // Update immediately on slider change
+  }
+
   const handleBlur = () => {
     onChange(inputValue)
   }
@@ -349,28 +360,45 @@ function ConfigInput({ label, value, onChange, disabled, error }) {
     }
   }
 
+  // Determine max value for slider (reasonable defaults)
+  const maxValue = Math.max(120, parseFloat(value) * 2 || 120)  // At least 120 min (2 hours)
+
   return (
     <div className="config-input-row">
       <label className="config-label">{label}</label>
-      <input
-        type="number"
-        className="config-input"
-        value={inputValue}
-        onChange={handleChange}
-        onBlur={handleBlur}
-        onKeyPress={handleKeyPress}
-        disabled={disabled}
-        step="0.1"
-        min="0"
-      />
-      <span className="config-unit">Min.</span>
-      <button
-        className="config-ok-btn"
-        onClick={() => onChange(inputValue)}
-        disabled={disabled}
-      >
-        OK
-      </button>
+      <div className="config-input-container">
+        <input
+          type="range"
+          className="config-slider"
+          value={inputValue}
+          onChange={handleSliderChange}
+          disabled={disabled}
+          min="0"
+          max={maxValue}
+          step="0.5"
+        />
+        <div className="config-value-group">
+          <input
+            type="number"
+            className="config-input"
+            value={inputValue}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            onKeyPress={handleKeyPress}
+            disabled={disabled}
+            step="0.1"
+            min="0"
+          />
+          <span className="config-unit">Min.</span>
+          <button
+            className="config-ok-btn"
+            onClick={() => onChange(inputValue)}
+            disabled={disabled}
+          >
+            ✓
+          </button>
+        </div>
+      </div>
       {error && <span className="config-error">{error}</span>}
     </div>
   )

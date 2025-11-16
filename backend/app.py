@@ -119,6 +119,43 @@ def reset_emergency():
     return jsonify({'success': True, 'message': 'Emergency stop reset'})
 
 
+@app.route('/api/control/reset-simulation', methods=['POST'])
+def reset_simulation():
+    """Reset simulation - set water level to empty tank and reset phase durations"""
+    if hardware_mode == 'mock':
+        # Reset mock GPIO water level to maximum distance (empty tank)
+        controller.gpio.simulated_water_level = 100.0  # 100cm = tank mostly empty
+
+        # Reset phase durations to defaults so cycle starts from zulauf_1
+        default_durations = {
+            't_z1': 60,    # 1 minute for testing
+            't_d1': 60,    # 1 minute
+            't_n1': 60,    # 1 minute
+            't_z2': 60,    # 1 minute
+            't_d2': 60,    # 1 minute
+            't_n2': 60,    # 1 minute
+            't_z3': 60,    # 1 minute
+            't_d3': 60,    # 1 minute
+            't_n3': 60,    # 1 minute
+            't_sed': 60,   # 1 minute
+            't_abzug': 60, # 1 minute
+            't_still': 0   # 0 - no idle time
+        }
+
+        # Update controller configuration
+        controller.config['phase_durations'] = default_durations
+
+        db.log_system_event('simulation_reset', 'Simulation reset - water level and durations reset', 'info')
+        return jsonify({
+            'success': True,
+            'message': 'Simulation reset - tank empty, all phases set to 1 minute',
+            'level': 100.0,
+            'durations': default_durations
+        })
+    else:
+        return jsonify({'success': False, 'message': 'Reset only available in mock mode'}), 400
+
+
 @app.route('/api/control/component', methods=['POST'])
 def control_component():
     """Manual component control"""
@@ -233,11 +270,39 @@ def update_aeration():
         }), 400
 
 
+# ============= Frontend Static Files =============
+
+# Path to frontend build directory
+FRONTEND_BUILD_DIR = Path(__file__).parent.parent / 'frontend' / 'dist'
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    """Serve frontend static files"""
+    # Don't serve API routes through static file handler
+    if path.startswith('api/'):
+        return jsonify({'error': 'API route not found'}), 404
+
+    # Try to serve the requested file
+    if path and (FRONTEND_BUILD_DIR / path).exists():
+        return send_from_directory(FRONTEND_BUILD_DIR, path)
+
+    # Otherwise serve index.html (for SPA routing)
+    return send_from_directory(FRONTEND_BUILD_DIR, 'index.html')
+
+
 # ============= WebSocket Events =============
 
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection"""
+    global data_logger_thread
+
+    # Start data logger if not running (handles Flask auto-reload issue)
+    if not data_logger_running or (data_logger_thread and not data_logger_thread.is_alive()):
+        start_data_logger()
+        print("[APP] Data logger (re)started")
+
     print(f"[WebSocket] Client connected: {request.sid}")
     emit('connected', {'message': 'Connected to IBC Treatment System'})
     # Send current status
@@ -261,13 +326,30 @@ def handle_status_request():
 def data_logger_worker():
     """Background worker to log data and emit updates"""
     global data_logger_running
+    import sys
 
-    print("[DATA LOGGER] Started")
+    print("[DATA LOGGER] Started", flush=True)
 
     while data_logger_running:
         try:
+            # Read water level sensor buttons even when idle
+            water_full = controller.gpio.read_input(23)
+            water_empty = controller.gpio.read_input(24)
+
+            # Stop components if buttons are pressed
+            if water_full and controller.component_states.get('inlet_pump', False):
+                print("[WATER LEVEL] FULL sensor triggered - Stopping inlet pump", flush=True)
+                controller._set_component_state('inlet_pump', False)
+
+            if water_empty and controller.component_states.get('drain_valve', False):
+                print("[WATER LEVEL] EMPTY sensor triggered - Stopping drain valve", flush=True)
+                controller._set_component_state('drain_valve', False)
+
             # Get current status
             status = controller.get_status()
+
+            # Debug log
+            print(f"[DATA LOGGER] Level: {status['current_level']:.2f} cm, Components: {status['components']}, Buttons: FULL={water_full}, EMPTY={water_empty}", flush=True)
 
             # Log to database if running
             if status['is_running']:
@@ -278,16 +360,18 @@ def data_logger_worker():
                 )
 
             # Emit to all connected WebSocket clients
-            socketio.emit('status_update', status)
+            socketio.emit('status_update', status, namespace='/')
 
             # Sleep for logging interval (10 seconds by default)
             time.sleep(controller.config['logging']['interval'])
 
         except Exception as e:
-            print(f"[DATA LOGGER] Error: {e}")
+            print(f"[DATA LOGGER] Error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             time.sleep(5)
 
-    print("[DATA LOGGER] Stopped")
+    print("[DATA LOGGER] Stopped", flush=True)
 
 
 def start_data_logger():
@@ -334,8 +418,10 @@ controller.register_event_callback('emergency_stop', lambda d: on_controller_eve
 @app.before_request
 def before_first_request():
     """Initialize on first request"""
-    if not data_logger_running:
+    global data_logger_thread
+    if not data_logger_running or (data_logger_thread and not data_logger_thread.is_alive()):
         start_data_logger()
+        print("[APP] Data logger (re)started")
 
 
 def cleanup():
@@ -372,7 +458,7 @@ if __name__ == '__main__':
     Press CTRL+C to stop
     """)
 
-    # Start data logger
+    # Start data logger (works properly when debug=False)
     start_data_logger()
 
     # Run Flask app with SocketIO

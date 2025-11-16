@@ -7,7 +7,12 @@
       "Bash(npm run dev)",
       "Bash(pip install:*)",
       "Bash(python app.py:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(pip3 install:*)",
+      "Bash(python3:*)",
+      "Bash(sudo dpkg:*)",
+      "Bash(cloudflared --version:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

@@ -10,6 +10,11 @@ import EventLog from './components/EventLog'
 import Statistics from './components/Statistics'
 import ConfigPanel from './components/ConfigPanel'
 
+// Backend API URL configuration
+const API_BASE_URL = window.location.hostname === 'localhost'
+  ? 'http://localhost:5000'
+  : window.location.origin
+
 function App() {
   const [socket, setSocket] = useState(null)
   const [connected, setConnected] = useState(false)
@@ -44,7 +49,7 @@ function App() {
 
   const fetchConfig = async () => {
     try {
-      const response = await fetch('/api/config')
+      const response = await fetch(`${API_BASE_URL}/api/config`)
       const data = await response.json()
       setConfig(data)
     } catch (error) {
@@ -54,8 +59,8 @@ function App() {
 
   // Initialize WebSocket connection
   useEffect(() => {
-    const newSocket = io('http://localhost:5000', {
-      transports: ['websocket'],
+    const newSocket = io(API_BASE_URL, {
+      transports: ['polling', 'websocket'],  // Try polling first for Cloudflare compatibility
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 10
@@ -142,7 +147,7 @@ function App() {
 
   const apiCall = async (endpoint, method = 'POST') => {
     try {
-      const response = await fetch(`/api${endpoint}`, { method })
+      const response = await fetch(`${API_BASE_URL}/api${endpoint}`, { method })
       const data = await response.json()
 
       if (!data.success && data.message) {
@@ -168,9 +173,25 @@ function App() {
   }
   const handleResetEmergency = () => apiCall('/control/reset-emergency')
 
+  const handleResetSimulation = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/control/reset-simulation`, {
+        method: 'POST'
+      })
+      const data = await response.json()
+      if (data.success) {
+        addEvent('Simulation', 'Wasserstand auf leer zurückgesetzt (100cm)', 'info')
+      } else {
+        addEvent('Fehler', data.message, 'error')
+      }
+    } catch (error) {
+      addEvent('Fehler', 'Konnte Simulation nicht zurücksetzen: ' + error.message, 'error')
+    }
+  }
+
   const handleManualControl = async (component, state) => {
     try {
-      const response = await fetch('/api/control/component', {
+      const response = await fetch(`${API_BASE_URL}/api/control/component`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ component, state })
@@ -250,6 +271,7 @@ function App() {
           onResume={handleResumeCycle}
           onEmergencyStop={handleEmergencyStop}
           onResetEmergency={handleResetEmergency}
+          onResetSimulation={handleResetSimulation}
         />
 
         {/* Middle Row - Phase & Components */}

@@ -1,195 +1,156 @@
-# IBC Wastewater Treatment Configuration - 12-Phase SBR System
-# Based on Professor's V1 design with step-feed biological nitrogen removal
-# All times in seconds
-
-# Phase Durations (matching professor's parameters)
 phase_durations:
-  # Cycle 1
-  t_z1: 0      # Zulauf 1 (Inflow 1) - seconds
-  t_d1: 0      # Denitrification 1 (Unbelüftet 1) - seconds
-  t_n1: 0      # Nitrification 1 (Belüftung 1) - seconds
-
-  # Cycle 2
-  t_z2: 0      # Zulauf 2 (Inflow 2) - seconds
-  t_d2: 0      # Denitrification 2 (Unbelüftet 2) - seconds
-  t_n2: 0      # Nitrification 2 (Belüftung 2) - seconds
-
-  # Cycle 3 (typically the only active cycle)
-  t_z3: 900    # Zulauf 3 (Inflow 3) - 15 minutes default
-  t_d3: 900    # Denitrification 3 (Unbelüftet 3) - 15 minutes default
-  t_n3: 1800   # Nitrification 3 (Belüftung 3) - 30 minutes default
-
-  # Final phases
-  t_sed: 3600    # Sedimentation (Settling) - 60 minutes default
-  t_abzug: 3600  # Klarwasserabzug (Clear water drain) - 60 minutes default
-  t_still: 0     # Stillstandszeit (Idle time before next cycle) - seconds
-
-# Aeration Modes
+  t_z1: 30.0
+  t_d1: 30.0
+  t_n1: 30.0
+  t_z2: 30.0
+  t_d2: 30.0
+  t_n2: 30.0
+  t_z3: 30.0
+  t_d3: 30.0
+  t_n3: 30.0
+  t_sed: 30.0
+  t_abzug: 30.0
+  t_still: 30.0
 aeration:
-  # Continuous Aeration (Belüftung) - used during nitrification phases
   continuous:
-    t_luftan: 300      # Blower ON duration - 5 minutes default
-    t_luftpause: 180   # Blower OFF (pause) duration - 3 minutes default
-    description: "Pattern: ON for t_luftan → OFF for t_luftpause → repeat"
-
-  # Pulse Aeration (Stoßbelüftung) - used during inflow and denitrification phases
+    t_luftan: 30.0
+    t_luftpause: 30.0
+    description: "Pattern: ON for t_luftan \u2192 OFF for t_luftpause \u2192 repeat"
   pulse:
-    t_stossan: 6       # Blower ON duration - 0.1 minute (6 seconds) default
-    t_stosspause: 300  # Blower OFF (pause) duration - 5 minutes default
-    description: "Pattern: OFF for t_stosspause → ON for t_stossan → repeat"
-
-# Treatment Phase Definitions (execution order)
+    t_stossan: 6.0
+    t_stosspause: 30.0
+    description: "Pattern: OFF for t_stosspause \u2192 ON for t_stossan \u2192 repeat"
 treatment_phases:
-  # CYCLE 1
   phase_1_zulauf_1:
-    name: "Zulauf 1"
-    description: "Inflow 1 - Fill with wastewater batch 1"
-    duration_param: "t_z1"
+    name: Zulauf 1
+    description: Inflow 1 - Fill with wastewater batch 1
+    duration_param: t_z1
     inlet_pump: true
     drain_valve: false
-    aeration_mode: "pulse"  # Stoßbelüftung during filling
-
+    aeration_mode: pulse
   phase_2_deni_1:
-    name: "Unbelüftet 1"
-    description: "Denitrification 1 - Anoxic phase for nitrogen removal"
-    duration_param: "t_d1"
+    name: "Unbel\xFCftet 1"
+    description: Denitrification 1 - Anoxic phase for nitrogen removal
+    duration_param: t_d1
     inlet_pump: false
     drain_valve: false
-    aeration_mode: "pulse"  # Gentle mixing without much oxygen
-
+    aeration_mode: pulse
   phase_3_nitri_1:
-    name: "Belüftung 1"
-    description: "Nitrification 1 - Aerobic phase for ammonia oxidation"
-    duration_param: "t_n1"
+    name: "Bel\xFCftung 1"
+    description: Nitrification 1 - Aerobic phase for ammonia oxidation
+    duration_param: t_n1
     inlet_pump: false
     drain_valve: false
-    aeration_mode: "continuous"  # Full aeration with on/off pattern
-
-  # CYCLE 2
+    aeration_mode: continuous
   phase_4_zulauf_2:
-    name: "Zulauf 2"
-    description: "Inflow 2 - Fill with wastewater batch 2"
-    duration_param: "t_z2"
+    name: Zulauf 2
+    description: Inflow 2 - Fill with wastewater batch 2
+    duration_param: t_z2
     inlet_pump: true
     drain_valve: false
-    aeration_mode: "pulse"
-
+    aeration_mode: pulse
   phase_5_deni_2:
-    name: "Unbelüftet 2"
-    description: "Denitrification 2 - Anoxic phase for nitrogen removal"
-    duration_param: "t_d2"
+    name: "Unbel\xFCftet 2"
+    description: Denitrification 2 - Anoxic phase for nitrogen removal
+    duration_param: t_d2
     inlet_pump: false
     drain_valve: false
-    aeration_mode: "pulse"
-
+    aeration_mode: pulse
   phase_6_nitri_2:
-    name: "Belüftung 2"
-    description: "Nitrification 2 - Aerobic phase for ammonia oxidation"
-    duration_param: "t_n2"
+    name: "Bel\xFCftung 2"
+    description: Nitrification 2 - Aerobic phase for ammonia oxidation
+    duration_param: t_n2
     inlet_pump: false
     drain_valve: false
-    aeration_mode: "continuous"
-
-  # CYCLE 3
+    aeration_mode: continuous
   phase_7_zulauf_3:
-    name: "Zulauf 3"
-    description: "Inflow 3 - Fill with wastewater batch 3"
-    duration_param: "t_z3"
+    name: Zulauf 3
+    description: Inflow 3 - Fill with wastewater batch 3
+    duration_param: t_z3
     inlet_pump: true
     drain_valve: false
-    aeration_mode: "pulse"
-
+    aeration_mode: pulse
   phase_8_deni_3:
-    name: "Unbelüftet 3"
-    description: "Denitrification 3 - Anoxic phase for nitrogen removal"
-    duration_param: "t_d3"
+    name: "Unbel\xFCftet 3"
+    description: Denitrification 3 - Anoxic phase for nitrogen removal
+    duration_param: t_d3
     inlet_pump: false
     drain_valve: false
-    aeration_mode: "pulse"
-
+    aeration_mode: pulse
   phase_9_nitri_3:
-    name: "Belüftung 3"
-    description: "Nitrification 3 - Aerobic phase for ammonia oxidation"
-    duration_param: "t_n3"
+    name: "Bel\xFCftung 3"
+    description: Nitrification 3 - Aerobic phase for ammonia oxidation
+    duration_param: t_n3
     inlet_pump: false
     drain_valve: false
-    aeration_mode: "continuous"
-
-  # FINAL PHASES
+    aeration_mode: continuous
   phase_10_sedimentation:
-    name: "Sedimentation"
-    description: "Settling phase - Allow solids to settle to bottom"
-    duration_param: "t_sed"
+    name: Sedimentation
+    description: Settling phase - Allow solids to settle to bottom
+    duration_param: t_sed
     inlet_pump: false
     drain_valve: false
-    aeration_mode: "none"  # All components OFF
-
+    aeration_mode: none
   phase_11_klarwasserabzug:
-    name: "Klarwasserabzug"
-    description: "Clear water drain - Remove treated water from top"
-    duration_param: "t_abzug"
+    name: Klarwasserabzug
+    description: Clear water drain - Remove treated water from top
+    duration_param: t_abzug
     inlet_pump: false
     drain_valve: true
-    aeration_mode: "none"
-
+    aeration_mode: none
   phase_12_stillstand:
-    name: "Stillstandszeit"
-    description: "Idle time - Pause before next cycle"
-    duration_param: "t_still"
+    name: Stillstandszeit
+    description: Idle time - Pause before next cycle
+    duration_param: t_still
     inlet_pump: false
     drain_valve: false
-    aeration_mode: "none"
-
-# Hardware Configuration (matching professor's GPIO setup)
+    aeration_mode: none
 hardware:
   components:
     inlet_pump:
-      pin: 22  # GPIO 22 - same as professor
-      name: "Zulaufpumpe"
-      voltage: "230V"
-      max_runtime: 3600  # Safety: max 60 min continuous
-      active_low: false  # LOW = ON, HIGH = OFF (relay logic)
-
+      pin: 17
+      name: Zulaufpumpe LED
+      voltage: 3.3V
+      max_runtime: 3600
+      active_low: false
     drain_valve:
-      pin: 27  # GPIO 27 - same as professor
-      name: "Ablaufventil"
-      voltage: "230V"
-      max_runtime: 7200  # Safety: max 2 hours continuous
+      pin: 27
+      name: Ablaufventil LED
+      voltage: 3.3V
+      max_runtime: 7200
       active_low: false
-
     blower:
-      pin: 23  # GPIO 23 - same as professor
-      name: "Verdichter"
-      voltage: "400V"
-      max_runtime: 14400  # Safety: max 4 hours continuous
+      pin: 22
+      name: Verdichter LED
+      voltage: 3.3V
+      max_runtime: 14400
       active_low: false
-
   sensors:
     level:
       trigger_pin: 24
       echo_pin: 25
-      name: "Ultrasonic Level Sensor"
-      min_distance: 5   # cm
-      max_distance: 150  # cm
-      read_interval: 2   # seconds
-      # Note: In mock mode, water level simulated based on pump states
-
-# Safety Settings
+      read_interval: 1.0
+    high_level_button:
+      pin: 23
+      name: High Water Level Sensor
+      type: button
+      pull_down: true
+    low_level_button:
+      pin: 24
+      name: Low Water Level Sensor
+      type: button
+      pull_down: true
 safety:
   emergency_stop_enabled: true
-  high_level_alarm: 10   # cm from sensor (very high water) - lowered to allow filling
-  low_level_alarm: 130   # cm from sensor (very low water)
-  max_cycle_duration: 43200  # 12 hours total cycle timeout
-  component_protection_interval: 60  # Minimum seconds between component starts
-
-# Logging
+  high_level_alarm: 10
+  low_level_alarm: 130
+  max_cycle_duration: 43200
+  component_protection_interval: 60
 logging:
-  interval: 10  # seconds - how often to log sensor readings
-  retain_days: 30  # days to keep historical data
-
-# System Information
+  interval: 1
+  retain_days: 30
 system:
-  name: "IBC-Versuchskläranlage"
-  description: "IBC-based Sequencing Batch Reactor for wastewater treatment"
-  version: "2.0"
-  process_type: "Step-feed SBR with biological nitrogen removal"
+  name: "IBC-Versuchskl\xE4ranlage"
+  description: IBC-based Sequencing Batch Reactor for wastewater treatment
+  version: '2.0'
+  process_type: Step-feed SBR with biological nitrogen removal
