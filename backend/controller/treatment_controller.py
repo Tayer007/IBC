@@ -126,27 +126,57 @@ class TreatmentController:
             'last_cycle_end': None
         }
 
-        # Phase sequence (matches professor's execution order)
-        self.phase_sequence = [
-            TreatmentPhase.ZULAUF_1,
-            TreatmentPhase.UNBELUEFTET_1,
-            TreatmentPhase.BELUEFTUNG_1,
-            TreatmentPhase.ZULAUF_2,
-            TreatmentPhase.UNBELUEFTET_2,
-            TreatmentPhase.BELUEFTUNG_2,
-            TreatmentPhase.ZULAUF_3,
-            TreatmentPhase.UNBELUEFTET_3,
-            TreatmentPhase.BELUEFTUNG_3,
-            TreatmentPhase.SEDIMENTATION,
-            TreatmentPhase.KLARWASSERABZUG,
-            TreatmentPhase.STILLSTAND
-        ]
+        # Repetitions tracking
+        self.total_repetitions = self.config.get('cycle_repetitions', 1)
+        self.current_repetition = 0
 
-        print(f"[CONTROLLER] Initialized 12-phase SBR controller in {hardware_mode} mode")
+        # Build phase sequence dynamically based on num_cycles
+        self.phase_sequence = self._build_phase_sequence()
+
+        num_cycles = self.config.get('num_cycles', 3)
+        print(f"[CONTROLLER] Initialized {num_cycles}-cycle SBR controller in {hardware_mode} mode")
+        print(f"[CONTROLLER] Cycle repetitions: {self.total_repetitions}")
 
     def register_event_callback(self, event_type: str, callback: Callable):
         """Register callback for events (for WebSocket updates)"""
         self.event_callbacks[event_type] = callback
+
+    def _build_phase_sequence(self) -> list:
+        """Build phase sequence dynamically based on num_cycles configuration"""
+        num_cycles = self.config.get('num_cycles', 3)
+        sequence = []
+
+        # Add feed cycles (Zulauf -> Unbelüftet -> Belüftung)
+        # Cycles 1-3 use their specific enums
+        # Cycles 4+ reuse ZULAUF_3, UNBELUEFTET_3, BELUEFTUNG_3
+        for i in range(1, num_cycles + 1):
+            if i == 1:
+                sequence.extend([
+                    TreatmentPhase.ZULAUF_1,
+                    TreatmentPhase.UNBELUEFTET_1,
+                    TreatmentPhase.BELUEFTUNG_1
+                ])
+            elif i == 2:
+                sequence.extend([
+                    TreatmentPhase.ZULAUF_2,
+                    TreatmentPhase.UNBELUEFTET_2,
+                    TreatmentPhase.BELUEFTUNG_2
+                ])
+            else:  # i >= 3 (cycles 3, 4, 5, ..., 9999)
+                sequence.extend([
+                    TreatmentPhase.ZULAUF_3,
+                    TreatmentPhase.UNBELUEFTET_3,
+                    TreatmentPhase.BELUEFTUNG_3
+                ])
+
+        # Always add final phases
+        sequence.extend([
+            TreatmentPhase.SEDIMENTATION,
+            TreatmentPhase.KLARWASSERABZUG,
+            TreatmentPhase.STILLSTAND
+        ])
+
+        return sequence
 
     def _emit_event(self, event_type: str, data: Dict[str, Any]):
         """Emit event to registered callbacks"""
@@ -293,34 +323,49 @@ class TreatmentController:
             return True
 
     def _control_loop(self):
-        """Main control loop - executes all 12 phases in sequence"""
-        print("[CONTROLLER] Control loop started - beginning 12-phase cycle")
+        """Main control loop - executes all phases in sequence with repetitions"""
+        num_phases = len(self.phase_sequence)
+        print(f"[CONTROLLER] Control loop started - beginning {num_phases}-phase cycle")
+        print(f"[CONTROLLER] Will repeat {self.total_repetitions} time(s)")
 
         try:
-            phase_index = 0
+            # Reset repetition counter
+            self.current_repetition = 0
 
-            while self.is_running and phase_index < len(self.phase_sequence):
-                if self.is_paused:
-                    time.sleep(0.5)
-                    continue
+            # Repeat the entire cycle sequence
+            while self.is_running and self.current_repetition < self.total_repetitions:
+                self.current_repetition += 1
+                print(f"[CONTROLLER] Starting repetition {self.current_repetition}/{self.total_repetitions}")
 
-                # Set current phase
-                self.current_phase = self.phase_sequence[phase_index]
+                phase_index = 0
 
-                # Execute phase
-                print(f"[CONTROLLER] Starting phase {phase_index + 1}/12: {self.current_phase.value}")
-                self._execute_phase(self.current_phase)
+                while self.is_running and phase_index < len(self.phase_sequence):
+                    if self.is_paused:
+                        time.sleep(0.5)
+                        continue
 
-                # Move to next phase if still running
+                    # Set current phase
+                    self.current_phase = self.phase_sequence[phase_index]
+
+                    # Execute phase
+                    print(f"[CONTROLLER] [Rep {self.current_repetition}/{self.total_repetitions}] Phase {phase_index + 1}/{num_phases}: {self.current_phase.value}")
+                    self._execute_phase(self.current_phase)
+
+                    # Move to next phase if still running
+                    if self.is_running:
+                        phase_index += 1
+
+                # Repetition complete
                 if self.is_running:
-                    phase_index += 1
+                    print(f"[CONTROLLER] Repetition {self.current_repetition}/{self.total_repetitions} completed")
 
-            # Cycle complete
+            # All cycles complete
             if self.is_running:
-                print("[CONTROLLER] 12-phase cycle completed successfully")
+                print(f"[CONTROLLER] All {self.total_repetitions} repetition(s) completed successfully")
                 self.stats['cycles_completed'] += 1
                 self._emit_event('cycle_completed', {
                     'cycles_completed': self.stats['cycles_completed'],
+                    'repetitions_completed': self.current_repetition,
                     'timestamp': datetime.now().isoformat()
                 })
                 self.stop_cycle()
@@ -563,26 +608,29 @@ class TreatmentController:
             # Debug logging - print button states
             print(f"[WATER LEVEL DEBUG] GPIO 24 (FULL): {self.water_full_button_pressed}, GPIO 23 (EMPTY): {self.water_empty_button_pressed}")
 
-            # Check and stop components based on button states
-            if self.water_full_button_pressed:
-                if self.component_states.get('inlet_pump', False):
-                    print("[WATER LEVEL] FULL sensor triggered - Stopping inlet pump")
-                    self._set_component_state('inlet_pump', False)
-                    self._emit_event('water_level_alarm', {
-                        'type': 'full',
-                        'message': 'Tank FULL - inlet pump stopped',
-                        'timestamp': datetime.now().isoformat()
-                    })
+            # DISABLED: Check and stop components based on button states
+            # These buttons are causing false triggers, disabling for now
+            # TODO: Fix hardware wiring or debounce logic
 
-            if self.water_empty_button_pressed:
-                if self.component_states.get('drain_valve', False):
-                    print("[WATER LEVEL] EMPTY sensor triggered - Stopping drain valve")
-                    self._set_component_state('drain_valve', False)
-                    self._emit_event('water_level_alarm', {
-                        'type': 'empty',
-                        'message': 'Tank EMPTY - drain valve stopped',
-                        'timestamp': datetime.now().isoformat()
-                    })
+            # if self.water_full_button_pressed:
+            #     if self.component_states.get('inlet_pump', False):
+            #         print("[WATER LEVEL] FULL sensor triggered - Stopping inlet pump")
+            #         self._set_component_state('inlet_pump', False)
+            #         self._emit_event('water_level_alarm', {
+            #             'type': 'full',
+            #             'message': 'Tank FULL - inlet pump stopped',
+            #             'timestamp': datetime.now().isoformat()
+            #         })
+
+            # if self.water_empty_button_pressed:
+            #     if self.component_states.get('drain_valve', False):
+            #         print("[WATER LEVEL] EMPTY sensor triggered - Stopping drain valve")
+            #         self._set_component_state('drain_valve', False)
+            #         self._emit_event('water_level_alarm', {
+            #             'type': 'empty',
+            #             'message': 'Tank EMPTY - drain valve stopped',
+            #             'timestamp': datetime.now().isoformat()
+            #         })
 
             self._emit_event('sensor_update', {
                 'level': self.current_level,
@@ -688,6 +736,9 @@ class TreatmentController:
                 'current_level': round(self.current_level, 2),
                 'components': self.component_states.copy(),
                 'aeration_mode': self.current_aeration_mode.value,
+                'num_cycles': self.config.get('num_cycles', 3),
+                'cycle_repetitions': self.total_repetitions,
+                'current_repetition': self.current_repetition,
                 'stats': self.stats.copy(),
                 'timestamp': datetime.now().isoformat()
             }
@@ -774,6 +825,73 @@ class TreatmentController:
                 self.config['aeration']['pulse']['t_stosspause'] = float(settings['t_stosspause'])
 
             print(f"[CONTROLLER] Updated aeration settings: {settings}")
+
+            # Save to YAML file
+            self._save_config_to_file()
+
+            return True
+
+    def update_num_cycles(self, num_cycles: int) -> bool:
+        """
+        Update the number of feed cycles.
+        Can only be updated when cycle is not running.
+
+        Args:
+            num_cycles: Number of feed cycles (0-9999)
+
+        Returns:
+            True if update successful, False otherwise
+        """
+        with self.lock:
+            if self.is_running:
+                print("[CONTROLLER] Cannot update configuration while cycle is running")
+                return False
+
+            # Validate num_cycles is in valid range
+            if not isinstance(num_cycles, int) or num_cycles < 0 or num_cycles > 9999:
+                print(f"[CONTROLLER] Invalid num_cycles: {num_cycles} (must be 0-9999)")
+                return False
+
+            # Update configuration
+            self.config['num_cycles'] = num_cycles
+
+            # Rebuild phase sequence
+            self.phase_sequence = self._build_phase_sequence()
+
+            print(f"[CONTROLLER] Updated num_cycles to {num_cycles}")
+            print(f"[CONTROLLER] Rebuilt phase sequence with {len(self.phase_sequence)} phases")
+
+            # Save to YAML file
+            self._save_config_to_file()
+
+            return True
+
+    def update_cycle_repetitions(self, repetitions: int) -> bool:
+        """
+        Update the number of cycle repetitions.
+        Can only be updated when cycle is not running.
+
+        Args:
+            repetitions: Number of times to repeat the entire cycle sequence (min: 1)
+
+        Returns:
+            True if update successful, False otherwise
+        """
+        with self.lock:
+            if self.is_running:
+                print("[CONTROLLER] Cannot update configuration while cycle is running")
+                return False
+
+            # Validate repetitions is a positive integer
+            if not isinstance(repetitions, int) or repetitions < 1:
+                print(f"[CONTROLLER] Invalid cycle_repetitions: {repetitions} (must be >= 1)")
+                return False
+
+            # Update configuration
+            self.config['cycle_repetitions'] = repetitions
+            self.total_repetitions = repetitions
+
+            print(f"[CONTROLLER] Updated cycle_repetitions to {repetitions}")
 
             # Save to YAML file
             self._save_config_to_file()

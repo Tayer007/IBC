@@ -1,24 +1,26 @@
+num_cycles: 3
+cycle_repetitions: 2
 phase_durations:
   t_z1: 30.0
   t_d1: 30.0
   t_n1: 30.0
-  t_z2: 30.0
-  t_d2: 30.0
-  t_n2: 30.0
-  t_z3: 30.0
-  t_d3: 30.0
-  t_n3: 30.0
-  t_sed: 30.0
-  t_abzug: 30.0
-  t_still: 30.0
+  t_z2: 18.0
+  t_d2: 18.0
+  t_n2: 18.0
+  t_z3: 18.0
+  t_d3: 18.0
+  t_n3: 18.0
+  t_sed: 18.0
+  t_abzug: 18.0
+  t_still: 18.0
 aeration:
   continuous:
-    t_luftan: 30.0
-    t_luftpause: 30.0
+    t_luftan: 18.0
+    t_luftpause: 18.0
     description: "Pattern: ON for t_luftan \u2192 OFF for t_luftpause \u2192 repeat"
   pulse:
     t_stossan: 6.0
-    t_stosspause: 30.0
+    t_stosspause: 12.0
     description: "Pattern: OFF for t_stosspause \u2192 ON for t_stossan \u2192 repeat"
 treatment_phases:
   phase_1_zulauf_1:

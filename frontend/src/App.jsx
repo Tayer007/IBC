@@ -9,6 +9,7 @@ import PhaseTimeline from './components/PhaseTimeline'
 import EventLog from './components/EventLog'
 import Statistics from './components/Statistics'
 import ConfigPanel from './components/ConfigPanel'
+import ExpertMenu from './components/ExpertMenu'
 
 // Backend API URL configuration
 const API_BASE_URL = window.location.hostname === 'localhost'
@@ -41,6 +42,7 @@ function App() {
   const [levelHistory, setLevelHistory] = useState([])
   const [events, setEvents] = useState([])
   const [config, setConfig] = useState(null)
+  const [expertMenuOpen, setExpertMenuOpen] = useState(false)
 
   // Fetch initial configuration
   useEffect(() => {
@@ -221,9 +223,14 @@ function App() {
       <header className="app-header">
         <div className="header-content">
           <h1>IBC-Versuchskläranlage</h1>
-          <div className="connection-status">
-            <div className={`status-indicator ${connected ? 'connected' : 'disconnected'}`}></div>
-            <span>{connected ? 'Verbunden' : 'Getrennt'}</span>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <button className="expert-button" onClick={() => setExpertMenuOpen(true)}>
+              🔧 Experten-Menü
+            </button>
+            <div className="connection-status">
+              <div className={`status-indicator ${connected ? 'connected' : 'disconnected'}`}></div>
+              <span>{connected ? 'Verbunden' : 'Getrennt'}</span>
+            </div>
           </div>
         </div>
       </header>
@@ -306,6 +313,12 @@ function App() {
         <p>Hochschule Koblenz - IBC-Versuchskläranlage</p>
         <p>Kooperationsprojekt Elektrotechnik und Siedlungswasserwirtschaft</p>
       </footer>
+
+      {/* Expert Menu Modal */}
+      <ExpertMenu
+        isOpen={expertMenuOpen}
+        onClose={() => setExpertMenuOpen(false)}
+      />
     </div>
   )
 }

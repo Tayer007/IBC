@@ -270,6 +270,113 @@ def update_aeration():
         }), 400
 
 
+@app.route('/api/config/num-cycles', methods=['PUT'])
+def update_num_cycles():
+    """Update number of feed cycles"""
+    data = request.get_json()
+    if not data or 'num_cycles' not in data:
+        return jsonify({'success': False, 'message': 'No num_cycles provided'}), 400
+
+    num_cycles = data.get('num_cycles')
+    success = controller.update_num_cycles(num_cycles)
+    if success:
+        db.log_system_event('config_update', f'Number of cycles updated to {num_cycles}', 'info')
+        return jsonify({
+            'success': True,
+            'message': f'Number of cycles updated to {num_cycles}',
+            'num_cycles': controller.config['num_cycles']
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Could not update num_cycles (check if cycle is running or value is valid)'
+        }), 400
+
+
+@app.route('/api/config/cycle-repetitions', methods=['PUT'])
+def update_cycle_repetitions():
+    """Update number of cycle repetitions"""
+    data = request.get_json()
+    if not data or 'cycle_repetitions' not in data:
+        return jsonify({'success': False, 'message': 'No cycle_repetitions provided'}), 400
+
+    repetitions = data.get('cycle_repetitions')
+    success = controller.update_cycle_repetitions(repetitions)
+    if success:
+        db.log_system_event('config_update', f'Cycle repetitions updated to {repetitions}', 'info')
+        return jsonify({
+            'success': True,
+            'message': f'Cycle repetitions updated to {repetitions}',
+            'cycle_repetitions': controller.config['cycle_repetitions']
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Could not update cycle_repetitions (check if cycle is running or value is valid)'
+        }), 400
+
+
+# ============= Expert Menu API Endpoints =============
+
+@app.route('/api/expert/measurements', methods=['GET'])
+def get_expert_measurements():
+    """Get detailed sensor measurements for expert menu"""
+    limit = request.args.get('limit', 100, type=int)
+    readings = db.get_recent_readings(limit=limit)
+    return jsonify({
+        'success': True,
+        'count': len(readings),
+        'readings': readings
+    })
+
+
+@app.route('/api/expert/events', methods=['GET'])
+def get_expert_events():
+    """Get detailed system events for expert menu"""
+    limit = request.args.get('limit', 100, type=int)
+    events = db.get_recent_events(limit=limit)
+    return jsonify({
+        'success': True,
+        'count': len(events),
+        'events': events
+    })
+
+
+@app.route('/api/expert/logs', methods=['GET'])
+def get_expert_logs():
+    """Get backend log file contents for expert menu"""
+    lines = request.args.get('lines', 100, type=int)
+    log_file = Path(__file__).parent / 'backend.log'
+
+    try:
+        if log_file.exists():
+            with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                all_lines = f.readlines()
+                # Get last N lines
+                log_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+                # Strip newlines
+                log_lines = [line.rstrip('\n') for line in log_lines]
+
+            return jsonify({
+                'success': True,
+                'lines_requested': lines,
+                'lines_returned': len(log_lines),
+                'logs': log_lines
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Log file not found',
+                'logs': []
+            })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error reading log file: {str(e)}',
+            'logs': []
+        }), 500
+
+
 # ============= Frontend Static Files =============
 
 # Path to frontend build directory

@@ -29,6 +29,9 @@ function ConfigPanel({ config, isRunning, onConfigUpdate }) {
     t_stosspause: 300
   })
 
+  const [numCycles, setNumCycles] = useState(3)
+  const [cycleRepetitions, setCycleRepetitions] = useState(1)
+
   const [errors, setErrors] = useState({})
   const [successMessage, setSuccessMessage] = useState('')
 
@@ -44,6 +47,12 @@ function ConfigPanel({ config, isRunning, onConfigUpdate }) {
         t_stossan: config.aeration.pulse.t_stossan,
         t_stosspause: config.aeration.pulse.t_stosspause
       })
+    }
+    if (config?.num_cycles !== undefined) {
+      setNumCycles(config.num_cycles)
+    }
+    if (config?.cycle_repetitions !== undefined) {
+      setCycleRepetitions(config.cycle_repetitions)
     }
   }, [config])
 
@@ -127,8 +136,77 @@ function ConfigPanel({ config, isRunning, onConfigUpdate }) {
     }
   }
 
-  // Calculate total cycle duration
-  const totalDuration = Object.values(phaseDurations).reduce((sum, val) => sum + val, 0)
+  const handleSaveNumCycles = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/config/num-cycles`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ num_cycles: parseInt(numCycles) })
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        setSuccessMessage(`Anzahl Zyklen erfolgreich auf ${numCycles} gesetzt!`)
+        setTimeout(() => setSuccessMessage(''), 3000)
+        if (onConfigUpdate) onConfigUpdate()
+      } else {
+        alert(data.message)
+      }
+    } catch (error) {
+      alert('Fehler beim Aktualisieren: ' + error.message)
+    }
+  }
+
+  const handleSaveCycleRepetitions = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/config/cycle-repetitions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cycle_repetitions: parseInt(cycleRepetitions) })
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        setSuccessMessage(`Zykluswiederholungen erfolgreich auf ${cycleRepetitions} gesetzt!`)
+        setTimeout(() => setSuccessMessage(''), 3000)
+        if (onConfigUpdate) onConfigUpdate()
+      } else {
+        alert(data.message)
+      }
+    } catch (error) {
+      alert('Fehler beim Aktualisieren: ' + error.message)
+    }
+  }
+
+  // Calculate total cycle duration based on active cycles
+  const calculateActiveDuration = () => {
+    let total = 0
+
+    // Add cycle 1 phases if numCycles >= 1
+    if (numCycles >= 1) {
+      total += phaseDurations.t_z1 + phaseDurations.t_d1 + phaseDurations.t_n1
+    }
+
+    // Add cycle 2 phases if numCycles >= 2
+    if (numCycles >= 2) {
+      total += phaseDurations.t_z2 + phaseDurations.t_d2 + phaseDurations.t_n2
+    }
+
+    // Add cycle 3+ phases (cycles 3-9999 use the same durations as cycle 3)
+    if (numCycles >= 3) {
+      const cycleDuration = phaseDurations.t_z3 + phaseDurations.t_d3 + phaseDurations.t_n3
+      const additionalCycles = numCycles - 2 // cycles 3, 4, 5, ..., numCycles
+      total += cycleDuration * additionalCycles
+    }
+
+    // Always add final phases
+    total += phaseDurations.t_sed + phaseDurations.t_abzug + phaseDurations.t_still
+
+    return total
+  }
+
+  const totalDuration = calculateActiveDuration()
+  const totalWithRepetitions = totalDuration * cycleRepetitions
 
   return (
     <div className="config-panel card">
@@ -146,93 +224,108 @@ function ConfigPanel({ config, isRunning, onConfigUpdate }) {
         </div>
       )}
 
+      {/* Cycle Configuration Section */}
+      <div className="config-section" style={{marginBottom: '20px', padding: '15px', border: '2px solid #4CAF50', borderRadius: '8px'}}>
+        <h3>🔄 Zyklussteuerung</h3>
+
+        <div style={{display: 'flex', gap: '20px', alignItems: 'flex-end'}}>
+          <div style={{flex: 1}}>
+            <label className="config-label">Anzahl Zyklen:</label>
+            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+              <input
+                type="number"
+                className="config-input"
+                value={numCycles}
+                onChange={(e) => setNumCycles(Math.max(0, Math.min(9999, parseInt(e.target.value) || 0)))}
+                disabled={isRunning}
+                min="0"
+                max="9999"
+                style={{width: '120px'}}
+              />
+              <button
+                className="btn btn-primary"
+                onClick={handleSaveNumCycles}
+                disabled={isRunning}
+                style={{whiteSpace: 'nowrap'}}
+              >
+                Speichern
+              </button>
+            </div>
+            <small style={{color: '#888', fontSize: '0.85em'}}>
+              Anzahl der Fütterungszyklen (Zulauf → Unbel. → Bel.)
+            </small>
+          </div>
+
+          <div style={{flex: 1}}>
+            <label className="config-label">Wiederholungen (min: 1):</label>
+            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+              <input
+                type="number"
+                className="config-input"
+                value={cycleRepetitions}
+                onChange={(e) => setCycleRepetitions(Math.max(1, parseInt(e.target.value) || 1))}
+                disabled={isRunning}
+                min="1"
+                style={{width: '80px'}}
+              />
+              <button
+                className="btn btn-primary"
+                onClick={handleSaveCycleRepetitions}
+                disabled={isRunning}
+                style={{whiteSpace: 'nowrap'}}
+              >
+                Speichern
+              </button>
+            </div>
+            <small style={{color: '#888', fontSize: '0.85em'}}>
+              Wie oft soll die gesamte Sequenz wiederholt werden?
+            </small>
+          </div>
+        </div>
+      </div>
+
       <div className="config-grid">
-        {/* Cycle 1 */}
-        <div className="config-section">
-          <h3>Zyklus 1</h3>
+        {/* Dynamically render cycles based on numCycles */}
+        {Array.from({ length: Math.min(numCycles, 3) }, (_, i) => i + 1).map(cycleNum => (
+          <div className="config-section" key={`cycle-${cycleNum}`}>
+            <h3>Zyklus {cycleNum}</h3>
 
-          <ConfigInput
-            label="Zulauf 1:"
-            value={convertToMinutes(phaseDurations.t_z1)}
-            onChange={(val) => handlePhaseChange('t_z1', val)}
-            disabled={isRunning}
-            error={errors.t_z1}
-          />
+            <ConfigInput
+              label={`Zulauf ${cycleNum}:`}
+              value={convertToMinutes(phaseDurations[`t_z${cycleNum}`])}
+              onChange={(val) => handlePhaseChange(`t_z${cycleNum}`, val)}
+              disabled={isRunning}
+              error={errors[`t_z${cycleNum}`]}
+            />
 
-          <ConfigInput
-            label="Unbelüftet 1:"
-            value={convertToMinutes(phaseDurations.t_d1)}
-            onChange={(val) => handlePhaseChange('t_d1', val)}
-            disabled={isRunning}
-            error={errors.t_d1}
-          />
+            <ConfigInput
+              label={`Unbelüftet ${cycleNum}:`}
+              value={convertToMinutes(phaseDurations[`t_d${cycleNum}`])}
+              onChange={(val) => handlePhaseChange(`t_d${cycleNum}`, val)}
+              disabled={isRunning}
+              error={errors[`t_d${cycleNum}`]}
+            />
 
-          <ConfigInput
-            label="Belüftung 1:"
-            value={convertToMinutes(phaseDurations.t_n1)}
-            onChange={(val) => handlePhaseChange('t_n1', val)}
-            disabled={isRunning}
-            error={errors.t_n1}
-          />
-        </div>
+            <ConfigInput
+              label={`Belüftung ${cycleNum}:`}
+              value={convertToMinutes(phaseDurations[`t_n${cycleNum}`])}
+              onChange={(val) => handlePhaseChange(`t_n${cycleNum}`, val)}
+              disabled={isRunning}
+              error={errors[`t_n${cycleNum}`]}
+            />
+          </div>
+        ))}
 
-        {/* Cycle 2 */}
-        <div className="config-section">
-          <h3>Zyklus 2</h3>
-
-          <ConfigInput
-            label="Zulauf 2:"
-            value={convertToMinutes(phaseDurations.t_z2)}
-            onChange={(val) => handlePhaseChange('t_z2', val)}
-            disabled={isRunning}
-            error={errors.t_z2}
-          />
-
-          <ConfigInput
-            label="Unbelüftet 2:"
-            value={convertToMinutes(phaseDurations.t_d2)}
-            onChange={(val) => handlePhaseChange('t_d2', val)}
-            disabled={isRunning}
-            error={errors.t_d2}
-          />
-
-          <ConfigInput
-            label="Belüftung 2:"
-            value={convertToMinutes(phaseDurations.t_n2)}
-            onChange={(val) => handlePhaseChange('t_n2', val)}
-            disabled={isRunning}
-            error={errors.t_n2}
-          />
-        </div>
-
-        {/* Cycle 3 */}
-        <div className="config-section">
-          <h3>Zyklus 3</h3>
-
-          <ConfigInput
-            label="Zulauf 3:"
-            value={convertToMinutes(phaseDurations.t_z3)}
-            onChange={(val) => handlePhaseChange('t_z3', val)}
-            disabled={isRunning}
-            error={errors.t_z3}
-          />
-
-          <ConfigInput
-            label="Unbelüftet 3:"
-            value={convertToMinutes(phaseDurations.t_d3)}
-            onChange={(val) => handlePhaseChange('t_d3', val)}
-            disabled={isRunning}
-            error={errors.t_d3}
-          />
-
-          <ConfigInput
-            label="Belüftung 3:"
-            value={convertToMinutes(phaseDurations.t_n3)}
-            onChange={(val) => handlePhaseChange('t_n3', val)}
-            disabled={isRunning}
-            error={errors.t_n3}
-          />
-        </div>
+        {/* Show info if cycles > 3 */}
+        {numCycles > 3 && (
+          <div className="config-section" style={{gridColumn: '1 / -1', backgroundColor: '#fff3cd', border: '1px solid #ffc107'}}>
+            <p style={{margin: '10px', color: '#856404'}}>
+              ⚠️ <strong>Hinweis:</strong> Zyklen 4-{numCycles} verwenden dieselben Phasendauern wie Zyklus 3.
+              <br/>
+              Alle {numCycles} Zyklen werden nacheinander ausgeführt.
+            </p>
+          </div>
+        )}
 
         {/* Final Phases */}
         <div className="config-section">
@@ -308,8 +401,18 @@ function ConfigPanel({ config, isRunning, onConfigUpdate }) {
 
       {/* Total Cycle Time */}
       <div className="total-time">
-        <span className="total-label">Zykluszeit gesamt:</span>
-        <span className="total-value">{convertToMinutes(totalDuration)} Min.</span>
+        <div style={{display: 'flex', flexDirection: 'column', gap: '5px'}}>
+          <div>
+            <span className="total-label">Sequenzdauer (1x):</span>
+            <span className="total-value">{convertToMinutes(totalDuration)} Min.</span>
+          </div>
+          <div style={{borderTop: '1px solid #ddd', paddingTop: '5px'}}>
+            <span className="total-label">Gesamtdauer ({cycleRepetitions} Wiederholung{cycleRepetitions > 1 ? 'en' : ''}):</span>
+            <span className="total-value" style={{color: '#059669', fontWeight: 'bold'}}>
+              {convertToMinutes(totalWithRepetitions)} Min.
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Save Buttons */}
